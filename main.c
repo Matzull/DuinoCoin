@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <netdb.h>
-#include <openssl/sha.h>
+#include "sha1.h"
 #include <stdlib.h>
 #include <pthread.h>
 
@@ -14,6 +14,7 @@
 #include <unistd.h>
 #endif
 
+#define SHA_DIGEST_LENGTH 20
 #define serverip "51.15.127.80"
 const unsigned int serverport = 2811;
 
@@ -30,7 +31,7 @@ int main (int argc, char **argv) {
 
 	char job_message[64] = "JOB,";
 	char* requested_difficulty = ",LOW";
-	char serverversion[3]; // server ver is always 3 chars
+	char serverversion[4]; // server ver is always 3 chars
 	char serverreply[40 + 1 + 40 + 1 + 8]; // 2x sha1s, 2x commas, difficulty, \n
 	char username[32] = "";
 
@@ -74,11 +75,14 @@ int main (int argc, char **argv) {
 		printf("Error: Server version couldn't be received\n");
 		return 1;
 	}
-	else printf("Server is on version: %s\n\n", serverversion);
+	else{
+		serverversion[3] = 0;//Proper display of serverversion
+		printf("Server is on version: %s\n\n", serverversion);
+	}
 
 	/* Combine job request message */
 	strcat(job_message, username);
-	strcat(job_message, requested_difficulty);
+	//strcat(job_message, requested_difficulty);
 
 	printf("Mining started using DUCO-S1 algorithm\n");
 
@@ -92,6 +96,7 @@ int main (int argc, char **argv) {
 			printf("Error: Couldn't receive job\n");
 			return 1;
 		}
+		printf("%s", serverreply);//Printing serverreply
 
 		/* Split received data */
 		char* job = strtok (serverreply, ",");
@@ -119,7 +124,7 @@ int main (int argc, char **argv) {
 			char buf[SHA_DIGEST_LENGTH * 2];
 			memset(buf, 0x0, SHA_DIGEST_LENGTH * 2);
 			memset(temp, 0x0, SHA_DIGEST_LENGTH);
-			SHA1((unsigned char *)str_to_hash, strlen(str_to_hash), temp);
+			SHA1(buf, str_to_hash, strlen(str_to_hash));
 			long iZ = 0;
 			for (iZ = 0; iZ < SHA_DIGEST_LENGTH; iZ++)
 				sprintf((char*) & (buf[iZ * 2]), "%02x", temp[iZ]);
