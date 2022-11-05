@@ -5,6 +5,7 @@
 #include <string.h>
 #include <netdb.h>
 #include "sha1.h"
+#include <stdbool.h>
 #include <stdlib.h>
 #include <pthread.h>
 
@@ -15,9 +16,10 @@
 #endif
 
 #define SHA_DIGEST_LENGTH 20
-#define serverip "51.15.127.80"
-const unsigned int serverport = 2811;
-
+char serverIp[13] =  "51.15.127.80";
+int serverPort = 2811;
+char serverversion[3]; // server ver is always 3 chars
+char serverreply[40 + 1 + 40 + 1 + 8]; // 2x sha1s, 2x commas, difficulty, \n
 char *itoa (int num, char *str) {
 	/* Int to string */
 	if (str == NULL) return NULL;
@@ -25,25 +27,10 @@ char *itoa (int num, char *str) {
 	return str;
 }
 
-int main (int argc, char **argv) {
-	time_t start_t, end_t;
-	double diff_t;
-
-	char job_message[64] = "JOB,";
-	char* requested_difficulty = ",LOW";
-	char serverversion[4]; // server ver is always 3 chars
-	char serverreply[40 + 1 + 40 + 1 + 8]; // 2x sha1s, 2x commas, difficulty, \n
-	char username[32] = "";
-
-	unsigned int rejected_shares = 0;
-	unsigned int accepted_shares = 0;
-	unsigned int hashrate = 0;
-
+int server_Connect(char* serverIp, int serverPort)
+{
 	int socket_desc;
 	struct sockaddr_in server;
-
-	printf("\033[1;33md-cpuminer\n\033[1;35mby phantom32 and revox 2020-2021\n");
-	printf("\033[0m----------\n");
 
 	/* Create socket object */
 	socket_desc = socket(AF_INET , SOCK_STREAM , 0);
@@ -52,18 +39,11 @@ int main (int argc, char **argv) {
 		return 1;
 	}
 
-	if (argc < 2) {
-		printf("Enter your DUCO username (you can also pass it when launching the miner: ./d-cpuminer username): ");
-		scanf("%s", username);
-	}
-	else sprintf(username, argv[1], "%s"); // Get username from sys argv
-	printf("Continuing as user %s\n", username);
-
-	/* Establish connection to the server */
-	printf("Connecting\n");
-	server.sin_addr.s_addr = inet_addr(serverip);
+	/*Attempting to connect*/
+	printf("Connecting...\n");
+	server.sin_addr.s_addr = inet_addr(serverIp);
 	server.sin_family = AF_INET;
-	server.sin_port = htons(serverport);
+	server.sin_port = htons(serverPort);
 
 	if (connect(socket_desc, (struct sockaddr *)&server, sizeof(server)) < 0) {
 		printf("Error: Couldn't connect to the server\n");
@@ -79,6 +59,43 @@ int main (int argc, char **argv) {
 		serverversion[3] = 0;//Proper display of serverversion
 		printf("Server is on version: %s\n\n", serverversion);
 	}
+	return socket_desc;
+}
+
+bool fetchPools(char* serverIp, int serverPort)
+{
+	int socket_desc = server_Connect("https://server.duinocoin.com/getPool", 8080);
+	if (recv(socket_desc, serverreply, 40 + 1 + 40 + 1 + 8, 0) < 0) {
+		printf("Error: Couldn't receive job\n");
+		return 1;
+	}
+	printf("%s", serverreply);//Printing serverreply
+}
+
+int main (int argc, char **argv) {
+	time_t start_t, end_t;
+	double diff_t;
+
+	char job_message[64] = "JOB,";
+	char* requested_difficulty = ",LOW";
+	
+	char username[32] = "";
+
+	unsigned int rejected_shares = 0;
+	unsigned int accepted_shares = 0;
+	unsigned int hashrate = 0;
+
+	printf("\033[1;33md-cpuminer\n\033[1;35mby phantom32 and revox 2020-2021\n");
+	printf("\033[0m----------\n");
+
+	if (argc < 2) {
+		printf("Enter your DUCO username (you can also pass it when launching the miner: ./d-cpuminer username): ");
+		scanf("%s", username);
+	}
+	else sprintf(username, argv[1], "%s"); // Get username from sys argv
+	printf("Continuing as user %s\n", username);
+
+	/* Establish connection to the server */
 
 	/* Combine job request message */
 	strcat(job_message, username);
