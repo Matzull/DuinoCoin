@@ -16,15 +16,27 @@
 #endif
 
 #define SHA_DIGEST_LENGTH 20
-char serverIp[13] =  "51.15.127.80";
-int serverPort = 2811;
-char serverversion[3]; // server ver is always 3 chars
-char serverreply[40 + 1 + 40 + 1 + 8]; // 2x sha1s, 2x commas, difficulty, \n
+
+char serverVersion[4]; // server ver is always 3 chars + null end
+
 char *itoa (int num, char *str) {
 	/* Int to string */
 	if (str == NULL) return NULL;
 	sprintf(str, "%d", num);
 	return str;
+}
+
+void getServerVersion(int socket_desc)
+{
+	printf("Getting server version...\n");
+	if (recv(socket_desc, serverVersion, 3, 0) < 0) {
+		printf("Error: Server version couldn't be received\n");
+		return;
+	}
+	else{
+		serverVersion[3] = 0;//Proper display of serverversion
+		printf("Server is on version: %s\n\n", serverVersion);
+	}
 }
 
 int server_Connect(char* serverIp, int serverPort)
@@ -43,49 +55,68 @@ int server_Connect(char* serverIp, int serverPort)
 	printf("Connecting...\n");
 	server.sin_addr.s_addr = inet_addr(serverIp);
 	server.sin_family = AF_INET;
-	server.sin_port = htons(serverPort);
-
-	if (connect(socket_desc, (struct sockaddr *)&server, sizeof(server)) < 0) {
+    if (serverPort != -1)
+    {
+        server.sin_port = htons(serverPort);
+    }
+    int client_fd;
+	if ((client_fd = connect(socket_desc, (struct sockaddr*)&server, sizeof(server))) < 0) {
 		printf("Error: Couldn't connect to the server\n");
 		return 1;
 	}
-	else printf("Connected to the server\n");
 
-	if (recv(socket_desc, serverversion, 3, 0) < 0) {
-		printf("Error: Server version couldn't be received\n");
-		return 1;
-	}
-	else{
-		serverversion[3] = 0;//Proper display of serverversion
-		printf("Server is on version: %s\n\n", serverversion);
-	}
 	return socket_desc;
-}
+} 
 
-bool fetchPools(char* serverIp, int serverPort)
+bool fetchPools(char* serverIp, int* serverPort)
 {
-	int socket_desc = server_Connect("https://server.duinocoin.com/getPool", 8080);
-	if (recv(socket_desc, serverreply, 40 + 1 + 40 + 1 + 8, 0) < 0) {
-		printf("Error: Couldn't receive job\n");
-		return 1;
+    char* poolIp = inet_ntoa(*((struct in_addr **) gethostbyname("server.duinocoin.com")->h_addr_list)[0]);
+	int socket_desc = server_Connect(poolIp , 80);
+    char serverreply [350];
+    const char * request = "GET /getPool HTTP/1.0\r\nHost: www.server.duinocoin.com \r\nConnection: close\r\n\r\n";
+
+    if (send(socket_desc, request, strlen(request), 0) < 0) {
+        printf("Error: Couldn't connect to the pool.\n");
+        return false;
 	}
-	printf("%s", serverreply);//Printing serverreply
+
+	if (recv(socket_desc, serverreply, 350, 0) < 0) {
+		printf("Error: Couldn't receive pool information.\n");
+		return false;
+	}
+
+	printf(serverreply);
+    /*Find the value for serverIp and serverPort*/
+    char* json;
+    json = strstr(serverreply, "\"ip\":\"") + strlen("\"ip\":\"");
+    serverIp = strsep(&json, ",\"");
+    json = strstr(json, "\"port\":") + strlen("\"port\":");
+    *serverPort = atoi(strsep(&json, ",\""));
+    printf("Succesfully conected to pool\n");
+
+	return true;
 }
 
 int main (int argc, char **argv) {
 	time_t start_t, end_t;
 	double diff_t;
 
+	int socket_desc;
+
 	char job_message[64] = "JOB,";
 	char* requested_difficulty = ",LOW";
 	
+	char serverReply[40 + 1 + 40 + 1 + 8];// 2x sha1s, 2x commas, difficulty, \n
+	char* serverIp = "51.15.127.80";
+	int serverPort = 2811;
+
 	char username[32] = "";
 
 	unsigned int rejected_shares = 0;
 	unsigned int accepted_shares = 0;
 	unsigned int hashrate = 0;
 
-	printf("\033[1;33md-cpuminer\n\033[1;35mby phantom32 and revox 2020-2021\n");
+	printf("\033[1;33md-cpuminer\n\033[1;35mby phantom32, revox and Matzul 2020-2022\n");
 	printf("\033[0m----------\n");
 
 	if (argc < 2) {
@@ -95,7 +126,13 @@ int main (int argc, char **argv) {
 	else sprintf(username, argv[1], "%s"); // Get username from sys argv
 	printf("Continuing as user %s\n", username);
 
-	/* Establish connection to the server */
+	/* Establish connection to the server and get version*/
+	fetchPools(serverIp, &serverPort);
+
+	printf("Connected to the server\nIp: %s\nPort: %d\n", serverIp, serverPort);
+	socket_desc = server_Connect(serverIp, serverPort);
+
+	getServerVersion(socket_desc);
 
 	/* Combine job request message */
 	strcat(job_message, username);
@@ -104,27 +141,23 @@ int main (int argc, char **argv) {
 	printf("Mining started using DUCO-S1 algorithm\n");
 
 	while (1) {
+		printf("Requesting: %s\n", job_message);
 		if (send(socket_desc, job_message, strlen(job_message), 0) < 0) {
 			printf("Error: Couldn't send JOB message\n");
 			return 1;
 		}
 
-		if (recv(socket_desc, serverreply, 40 + 1 + 40 + 1 + 8, 0) < 0) {
+		if (recv(socket_desc, serverReply, 40 + 1 + 40 + 1 + 8, 0) < 0) {
 			printf("Error: Couldn't receive job\n");
 			return 1;
 		}
-		printf("%s", serverreply);//Printing serverreply
+		printf("%s", serverReply);//Printing serverreply
 
 		/* Split received data */
-		char* job = strtok (serverreply, ",");
+		char* job = strtok (serverReply, ",");
 		char* work = strtok (NULL, ",");
 		char* diff = strtok (NULL, "");
 		char ducos1_result_string[10] = "";
-
-		//printf("\nRecived data:\n");
-		//printf("JOB: %s\n", job);
-		//printf("JOB2: %s\n", work);
-		//printf("DIFF: %s\n", diff);
 
 		time(&start_t); // measure starting time
 		for (int i = 0; i < (100 * atoi(diff)) + 1; i++) {

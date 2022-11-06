@@ -8,7 +8,6 @@
 #include "sha1.h"
 #include <stdlib.h>
 #include <pthread.h>
-#include "jsmn.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -61,35 +60,29 @@ int server_Connect(char* serverIp, int serverPort)
 
 bool fetchPools()
 {
-	int socket_desc = server_Connect(serverip , 80);
-    char serverreply [500];
-    jsmn_parser p;
-    jsmntok_t t[7];
-    jsmn_init(&p);
+    char* poolIp = inet_ntoa(*((struct in_addr **) gethostbyname("server.duinocoin.com")->h_addr_list)[0]);
+	int socket_desc = server_Connect(poolIp , 80);
+    char serverreply [350];
     const char * request = "GET /getPool HTTP/1.0\r\nHost: www.server.duinocoin.com \r\nConnection: close\r\n\r\n";
-    //n = write(sockfd,request,strlen(request));
+
     if (send(socket_desc, request, strlen(request), 0) < 0) {
-        printf("Error: Couldn't send JOB message\n");
-        return 1;
+        printf("Error: Couldn't connect to the pool.\n");
+        return false;
 	}
-    else 
-    {
-        printf("Message sent\n");
-    }
-    
-	if (recv(socket_desc, serverreply, 500, 0) < 0) {
-		printf("Error: Couldn't receive job\n");
+
+	if (recv(socket_desc, serverreply, 350, 0) < 0) {
+		printf("Error: Couldn't receive pool information.\n");
 		return 1;
 	}
-    else {
-        printf("Message received\n");
-        printf("%s\n", serverreply);
-    }
-    printf("Done printing");
-    // int r = jsmn_parse(&p, serverreply, strlen(serverreply), t, 7); 
-    // printf("R value: %d", r);
-    
-	// printf("Server reply: %s\n", serverreply);//Printing serverreply
+
+    /*Find the value for serverIp and serverPort*/
+    char* json;
+    json = strstr(serverreply, "\"ip\":\"") + strlen("\"ip\":\"");
+    serverip = strsep(&json, ",\"");
+    json = strstr(json, "\"port\":") + strlen("\"port\":");
+    serverport = atoi(strsep(&json, ",\""));
+
+    printf("Succesfully conected to pool\n");
 }
 
 int main (int argc, char **argv) {
