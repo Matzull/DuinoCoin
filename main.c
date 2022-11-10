@@ -39,7 +39,7 @@ void getServerVersion(int socket_desc)
 	}
 }
 
-int server_Connect(char* serverIp, int serverPort)
+int server_Connect(const char* serverIp, const int serverPort)
 {
 	int socket_desc;
 	struct sockaddr_in server;
@@ -68,7 +68,7 @@ int server_Connect(char* serverIp, int serverPort)
 	return socket_desc;
 } 
 
-bool fetchPools(char* serverIp, int* serverPort)
+bool fetchPools(char** serverIp, int* serverPort)
 {
     char* poolIp = inet_ntoa(*((struct in_addr **) gethostbyname("server.duinocoin.com")->h_addr_list)[0]);
 	int socket_desc = server_Connect(poolIp , 80);
@@ -85,11 +85,11 @@ bool fetchPools(char* serverIp, int* serverPort)
 		return false;
 	}
 
-	printf(serverreply);
     /*Find the value for serverIp and serverPort*/
     char* json;
     json = strstr(serverreply, "\"ip\":\"") + strlen("\"ip\":\"");
-    serverIp = strsep(&json, ",\"");
+    strcpy(*serverIp, strsep(&json, ",\""));
+	printf("ServerIp (inside) %s\n", *serverIp);
     json = strstr(json, "\"port\":") + strlen("\"port\":");
     *serverPort = atoi(strsep(&json, ",\""));
     printf("Succesfully conected to pool\n");
@@ -127,8 +127,8 @@ int main (int argc, char **argv) {
 	printf("Continuing as user %s\n", username);
 
 	/* Establish connection to the server and get version*/
-	fetchPools(serverIp, &serverPort);
-
+	fetchPools(&serverIp, &serverPort);
+	
 	printf("Connected to the server\nIp: %s\nPort: %d\n", serverIp, serverPort);
 	socket_desc = server_Connect(serverIp, serverPort);
 
