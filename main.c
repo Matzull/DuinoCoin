@@ -68,7 +68,7 @@ int server_Connect(const char* serverIp, const int serverPort)
 	return socket_desc;
 } 
 
-bool fetchPools(char** serverIp, int* serverPort)
+bool fetchPools(char* serverIp, int* serverPort)
 {
     char* poolIp = inet_ntoa(*((struct in_addr **) gethostbyname("server.duinocoin.com")->h_addr_list)[0]);
 	int socket_desc = server_Connect(poolIp , 80);
@@ -88,8 +88,7 @@ bool fetchPools(char** serverIp, int* serverPort)
     /*Find the value for serverIp and serverPort*/
     char* json;
     json = strstr(serverreply, "\"ip\":\"") + strlen("\"ip\":\"");
-    strcpy(*serverIp, strsep(&json, ",\""));
-	printf("ServerIp (inside) %s\n", *serverIp);
+    strcpy(serverIp, strsep(&json, ",\""));
     json = strstr(json, "\"port\":") + strlen("\"port\":");
     *serverPort = atoi(strsep(&json, ",\""));
     printf("Succesfully conected to pool\n");
@@ -106,8 +105,8 @@ int main (int argc, char **argv) {
 	char job_message[64] = "JOB,";
 	char* requested_difficulty = ",LOW";
 	
-	char serverReply[40 + 1 + 40 + 1 + 8];// 2x sha1s, 2x commas, difficulty, \n
-	char* serverIp = "51.15.127.80";
+	char* serverReply = malloc(90);// 2x sha1s, 2x commas, difficulty, \n
+	char serverIp[16] = "51.15.127.80";
 	int serverPort = 2811;
 
 	char username[32] = "";
@@ -127,7 +126,7 @@ int main (int argc, char **argv) {
 	printf("Continuing as user %s\n", username);
 
 	/* Establish connection to the server and get version*/
-	fetchPools(&serverIp, &serverPort);
+	fetchPools(serverIp, &serverPort);
 	
 	printf("Connected to the server\nIp: %s\nPort: %d\n", serverIp, serverPort);
 	socket_desc = server_Connect(serverIp, serverPort);
@@ -136,18 +135,18 @@ int main (int argc, char **argv) {
 
 	/* Combine job request message */
 	strcat(job_message, username);
-	//strcat(job_message, requested_difficulty);
+	strcat(job_message, requested_difficulty);
 
 	printf("Mining started using DUCO-S1 algorithm\n");
-
+	recv(socket_desc, serverReply, 10, 0);
 	while (1) {
 		printf("Requesting: %s\n", job_message);
 		if (send(socket_desc, job_message, strlen(job_message), 0) < 0) {
 			printf("Error: Couldn't send JOB message\n");
 			return 1;
 		}
-
-		if (recv(socket_desc, serverReply, 40 + 1 + 40 + 1 + 8, 0) < 0) {
+		
+		if (recv(socket_desc, serverReply, 90, 0) < 0) {
 			printf("Error: Couldn't receive job\n");
 			return 1;
 		}
@@ -176,14 +175,17 @@ int main (int argc, char **argv) {
 			memset(temp, 0x0, SHA_DIGEST_LENGTH);
 			SHA1(buf, str_to_hash, strlen(str_to_hash));
 			long iZ = 0;
-			for (iZ = 0; iZ < SHA_DIGEST_LENGTH; iZ++)
-				sprintf((char*) & (buf[iZ * 2]), "%02x", temp[iZ]);
+			// for (iZ = 0; iZ < SHA_DIGEST_LENGTH; iZ++)
+			// 	sprintf((char*) & (buf[iZ * 2]), "%02x", temp[iZ]);
 
-			//printf("Hashed res    : %s\n", buf);
-			//printf("Expected res  : %s\n\n", work);
+			for (iZ = 0; iZ < SHA_DIGEST_LENGTH; iZ++)
+				sprintf((char*) &(temp[iZ * 2]), "%02x", buf[iZ]);
+
+			printf("Hashed res    : %s\n", buf);
+			printf("Expected res  : %s\n\n", work);
 
 			if (strcmp(work, buf) == 0) {
-				//printf("Found share! %s\n", ducos1_result_string);
+				printf("Found share! %s\n", ducos1_result_string);
 
 				/* Calculate hashrate */
 				time(&end_t);
