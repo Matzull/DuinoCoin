@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <netdb.h>
-#include "sha1.h"
+#include "sha1-fast.h"
 #include <stdbool.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -24,6 +24,13 @@ char *itoa (int num, char *str) {
 	if (str == NULL) return NULL;
 	sprintf(str, "%d", num);
 	return str;
+}
+
+void toHex(char* input, char* digest)
+{
+	for (int i = 0; i < 20; i += 1) {
+		snprintf(&digest[2 * i], 3, "%02x", input[i]&0xff);
+	}
 }
 
 void getServerVersion(int socket_desc)
@@ -169,20 +176,18 @@ int main (int argc, char **argv) {
 
 			//printf("String to hash: %s\n", str_to_hash);
 
-			unsigned char temp[SHA_DIGEST_LENGTH];
+			char temp[SHA_DIGEST_LENGTH];
 			char buf[SHA_DIGEST_LENGTH * 2];
 			memset(buf, 0x0, SHA_DIGEST_LENGTH * 2);
 			memset(temp, 0x0, SHA_DIGEST_LENGTH);
-			SHA1(buf, str_to_hash, strlen(str_to_hash));
-			long iZ = 0;
-			// for (iZ = 0; iZ < SHA_DIGEST_LENGTH; iZ++)
-			// 	sprintf((char*) & (buf[iZ * 2]), "%02x", temp[iZ]);
+			uint32_t hash[5];
+			uint8_t message[20];
+			sha1_hash(temp ,20, hash);
+			SHA1(temp, str_to_hash, strlen(str_to_hash));
+			toHex(temp, buf);
 
-			for (iZ = 0; iZ < SHA_DIGEST_LENGTH; iZ++)
-				sprintf((char*) &(temp[iZ * 2]), "%02x", buf[iZ]);
-
-			printf("Hashed res    : %s\n", buf);
-			printf("Expected res  : %s\n\n", work);
+			// printf("Hashed res    : %s\n", buf);
+			// printf("Expected res  : %s\n\n", work);
 
 			if (strcmp(work, buf) == 0) {
 				printf("Found share! %s\n", ducos1_result_string);

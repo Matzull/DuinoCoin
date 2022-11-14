@@ -3,6 +3,13 @@
 #include <string.h>
 #include "sha1.h"
 
+void toHex(char* input, char* digest)
+{
+	for (int i = 0; i < 20; i += 1) {
+		snprintf(&digest[2 * i], 3, "%02x", input[i]&0xff);
+	}
+}
+
 int main (int argc, char **argv) {
 	
 	char* input = "hola";
@@ -10,15 +17,9 @@ int main (int argc, char **argv) {
 	char* digest = malloc(40);
 
 	SHA1(output, input, strlen(input));
+	
 
 	
-	for (int i = 0; i < 20; i += 1) {
-		printf("%x", output[i] &0xff);
-	}
-	sprintf(digest ,"%x", output[i] &0xff);
-	putchar('\n');
-
-	//printf("%s", output);
 
 	return 0;
 }
