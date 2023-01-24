@@ -4,10 +4,10 @@
 #include <unistd.h>
 #include <string.h>
 #include <netdb.h>
-#include "sha1-fast.h"
 #include <stdbool.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <openssl/sha.h>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -182,7 +182,7 @@ int main (int argc, char **argv) {
 			memset(temp, 0x0, SHA_DIGEST_LENGTH);
 			uint32_t hash[5];
 			uint8_t message[20];
-			sha1_hash(temp ,20, hash);
+			//sha1_hash(temp ,20, hash);
 			SHA1(temp, str_to_hash, strlen(str_to_hash));
 			toHex(temp, buf);
 
